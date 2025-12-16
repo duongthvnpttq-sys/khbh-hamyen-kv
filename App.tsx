@@ -92,8 +92,9 @@ const App: React.FC = () => {
       onLogout={handleLogout}
     >
       {activeTab === 'dashboard' && <Dashboard users={systemData.users} plans={systemData.plans} />}
-      {activeTab === 'users' && currentUser.role === 'admin' && (
+      {activeTab === 'users' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (
         <UserManagement 
+          currentUser={currentUser}
           users={systemData.users} 
           onAddUser={handleAddUser}
           onUpdateUser={handleUpdateUser}

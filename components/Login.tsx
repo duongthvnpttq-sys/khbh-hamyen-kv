@@ -71,21 +71,6 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading }) => {
             {isLoading ? 'Đang đăng nhập...' : 'ĐĂNG NHẬP HỆ THỐNG'}
           </button>
         </form>
-
-        <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-100">
-          <p className="text-xs text-blue-800 font-bold mb-2 uppercase">Thông tin demo:</p>
-          <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-            <div>
-               <span className="font-semibold block">Admin:</span> admin / admin123
-            </div>
-            <div>
-               <span className="font-semibold block">Quản lý:</span> levancuong / manager123
-            </div>
-            <div className="col-span-2">
-               <span className="font-semibold block">Nhân viên:</span> nguyenvanan / 123456
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

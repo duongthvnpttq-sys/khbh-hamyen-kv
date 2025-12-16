@@ -12,7 +12,7 @@ interface LayoutProps {
 
 const TABS: Record<string, { label: string; icon: React.ReactNode; roles: Role[] }> = {
   dashboard: { label: 'Tổng Quan', icon: <LayoutDashboard size={18} />, roles: ['admin', 'manager', 'employee'] },
-  users: { label: 'Người Dùng', icon: <Users size={18} />, roles: ['admin'] },
+  users: { label: 'Người Dùng', icon: <Users size={18} />, roles: ['admin', 'manager'] },
   plan: { label: 'Kế Hoạch', icon: <Calendar size={18} />, roles: ['admin', 'manager', 'employee'] },
   daily: { label: 'Báo Cáo', icon: <CheckSquare size={18} />, roles: ['admin', 'manager', 'employee'] },
   rating: { label: 'Đánh Giá', icon: <Star size={18} />, roles: ['admin', 'manager', 'employee'] },
@@ -39,8 +39,12 @@ export const Layout: React.FC<LayoutProps> = ({ currentUser, activeTab, onTabCha
             </div>
             <div className="text-right flex items-center gap-4">
               <div className="flex items-center gap-2">
-                <div className="bg-white/20 p-2 rounded-full">
-                  <UserCircle size={24} />
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center overflow-hidden border border-white/30">
+                  {currentUser.avatar ? (
+                    <img src={currentUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <UserCircle size={24} />
+                  )}
                 </div>
                 <div className="text-right hidden md:block">
                   <p className="text-sm font-semibold">{currentUser.employee_name}</p>

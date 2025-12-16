@@ -4,6 +4,7 @@ export interface User {
   id: string;
   employee_id: string;
   employee_name: string;
+  avatar?: string; // Base64 string for profile picture
   position: string;
   management_area: string;
   username: string;

@@ -42,7 +42,9 @@ const SEED_USERS: User[] = [
 ];
 
 // Helper to generate IDs
-const generateId = () => Math.random().toString(36).substr(2, 9);
+const generateId = () => {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+};
 
 export const dataService = {
   init: (): SystemData => {
@@ -60,7 +62,28 @@ export const dataService = {
 
   getData: (): SystemData => {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : { users: [], plans: [] };
+    const data: SystemData = stored ? JSON.parse(stored) : { users: [], plans: [] };
+    
+    // Safety check: Ensure all plans have an ID. 
+    // This fixes issues where legacy or manually added data might cause update failures.
+    let hasChanges = false;
+    if (data.plans) {
+      data.plans = data.plans.map(p => {
+        if (!p.id) {
+          hasChanges = true;
+          return { ...p, id: generateId() };
+        }
+        return p;
+      });
+    } else {
+      data.plans = [];
+    }
+    
+    if (hasChanges) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+    
+    return data;
   },
 
   saveData: (data: SystemData) => {
@@ -85,12 +108,18 @@ export const dataService = {
     if (index !== -1) {
       data.users[index] = user;
       dataService.saveData(data);
+    } else {
+      console.warn(`User with ID ${user.id} not found for update`);
     }
   },
 
   deleteUser: (id: string) => {
     const data = dataService.getData();
+    const initialLength = data.users.length;
     data.users = data.users.filter(u => u.id !== id);
+    if (data.users.length === initialLength) {
+       console.warn(`User with ID ${id} not found for deletion`);
+    }
     dataService.saveData(data);
   },
 
@@ -112,6 +141,8 @@ export const dataService = {
     if (index !== -1) {
       data.plans[index] = plan;
       dataService.saveData(data);
+    } else {
+      console.warn(`Plan with ID ${plan.id} not found for update`);
     }
   },
 

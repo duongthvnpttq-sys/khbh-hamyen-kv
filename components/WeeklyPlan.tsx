@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, Plan } from '../types';
-import { PlusCircle, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { PlusCircle, Clock, CheckCircle, XCircle, CalendarOff, AlertCircle } from 'lucide-react';
 
 interface WeeklyPlanProps {
   currentUser: User;
@@ -28,8 +28,18 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
     .filter(p => p.employee_id === currentUser.employee_id)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+  // Danh sách các ngày đã có kế hoạch của user này
+  const existingDates = myPlans.map(p => p.date);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Kiểm tra kỹ lại lần cuối trước khi submit
+    if (existingDates.includes(formData.date)) {
+      alert(`Ngày ${new Date(formData.date).toLocaleDateString('vi-VN')} đã có kế hoạch. Vui lòng kiểm tra lại.`);
+      return;
+    }
+
     onAddPlan({
       ...formData,
       employee_id: currentUser.employee_id,
@@ -55,6 +65,7 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
     alert('Đã gửi kế hoạch thành công!');
     setFormData({
       ...formData,
+      date: '', // Reset date
       work_content: '',
       area: '',
       sim_target: 0,
@@ -64,6 +75,16 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
       mesh_camera_target: 0,
       cntt_target: 0
     });
+  };
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedDate = e.target.value;
+    if (existingDates.includes(selectedDate)) {
+      alert(`Bạn đã lập kế hoạch cho ngày ${new Date(selectedDate).toLocaleDateString('vi-VN')} rồi. Vui lòng chọn ngày khác.`);
+      setFormData({ ...formData, date: '' }); // Xóa ngày vừa chọn
+      return;
+    }
+    setFormData({ ...formData, date: selectedDate });
   };
 
   const statusConfig = {
@@ -76,13 +97,31 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
   const weeks = Array.from({length: 53}, (_, i) => `Tuần ${i + 1}`);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
       <div className="lg:col-span-1 space-y-6">
         <div className="bg-white rounded-xl shadow-sm p-6 sticky top-6">
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
             <PlusCircle size={24} className="text-blue-600" />
             Lập Kế Hoạch Mới
           </h2>
+          
+          {existingDates.length > 0 && (
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200 text-xs text-gray-600">
+              <div className="flex items-center gap-2 font-bold mb-2 text-gray-500">
+                <CalendarOff size={14} />
+                Các ngày đã lập (Không thể chọn lại):
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {existingDates.slice(0, 10).map(d => (
+                  <span key={d} className="bg-gray-200 px-2 py-0.5 rounded text-gray-500 line-through">
+                    {new Date(d).toLocaleDateString('vi-VN').slice(0, 5)}
+                  </span>
+                ))}
+                {existingDates.length > 10 && <span>...</span>}
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tuần</label>
@@ -103,8 +142,9 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
                 type="date"
                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
                 value={formData.date}
-                onChange={e => setFormData({...formData, date: e.target.value})}
+                onChange={handleDateChange}
               />
+              <p className="text-[10px] text-gray-400 mt-1 italic">* Hệ thống sẽ chặn nếu chọn trùng ngày đã có kế hoạch.</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Địa Bàn</label>
@@ -186,49 +226,59 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
       <div className="lg:col-span-2 space-y-4">
         <h2 className="text-xl font-bold text-gray-800">Danh Sách Kế Hoạch Của Tôi</h2>
         {myPlans.length === 0 ? (
-          <div className="text-center py-10 bg-white rounded-xl text-gray-500 border border-dashed">
+          <div className="text-center py-10 bg-white rounded-xl text-gray-500 border border-dashed flex flex-col items-center">
+            <AlertCircle className="mb-2 opacity-50" size={32} />
             <p>Chưa có kế hoạch nào được tạo.</p>
           </div>
         ) : (
-          myPlans.map(plan => (
-            <div key={plan.id} className="bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-800">{plan.week_number}</span>
-                    <span className="text-gray-400">|</span>
-                    <span className="text-gray-600">{new Date(plan.date).toLocaleDateString('vi-VN')}</span>
+          myPlans.map(plan => {
+            const isCompletedOrApproved = plan.status === 'completed' || plan.status === 'approved';
+            
+            return (
+              <div 
+                key={plan.id} 
+                className={`bg-white rounded-xl shadow-sm p-5 border border-gray-100 hover:shadow-md transition 
+                  ${isCompletedOrApproved ? 'opacity-70 hover:opacity-100 bg-gray-50/50 grayscale-[30%]' : 'border-l-4 border-l-blue-500'}
+                `}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`font-bold ${isCompletedOrApproved ? 'text-gray-600' : 'text-gray-800'}`}>{plan.week_number}</span>
+                      <span className="text-gray-400">|</span>
+                      <span className="text-gray-600">{new Date(plan.date).toLocaleDateString('vi-VN')}</span>
+                    </div>
+                    <p className="font-medium text-blue-700 mt-1">{plan.area}</p>
                   </div>
-                  <p className="font-medium text-blue-700 mt-1">{plan.area}</p>
+                  <span className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${statusConfig[plan.status].color}`}>
+                    {statusConfig[plan.status].icon}
+                    {statusConfig[plan.status].label}
+                  </span>
                 </div>
-                <span className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${statusConfig[plan.status].color}`}>
-                  {statusConfig[plan.status].icon}
-                  {statusConfig[plan.status].label}
-                </span>
-              </div>
-              <p className="text-gray-700 text-sm mb-3 bg-gray-50 p-2 rounded">{plan.work_content}</p>
-              
-              <div className="grid grid-cols-6 gap-2 text-center text-xs text-gray-600 bg-gray-50 p-2 rounded mb-2">
-                <div><span className="block font-bold">SIM</span>{plan.sim_target}</div>
-                <div><span className="block font-bold">VAS</span>{plan.vas_target}</div>
-                <div><span className="block font-bold">Fiber</span>{plan.fiber_target}</div>
-                <div><span className="block font-bold">MyTV</span>{plan.mytv_target}</div>
-                <div><span className="block font-bold">Cam</span>{plan.mesh_camera_target}</div>
-                <div><span className="block font-bold">CNTT</span>{plan.cntt_target}</div>
-              </div>
+                <p className="text-gray-700 text-sm mb-3 bg-gray-50 p-2 rounded">{plan.work_content}</p>
+                
+                <div className="grid grid-cols-6 gap-2 text-center text-xs text-gray-600 bg-gray-50 p-2 rounded mb-2">
+                  <div><span className="block font-bold">SIM</span>{plan.sim_target}</div>
+                  <div><span className="block font-bold">VAS</span>{plan.vas_target}</div>
+                  <div><span className="block font-bold">Fiber</span>{plan.fiber_target}</div>
+                  <div><span className="block font-bold">MyTV</span>{plan.mytv_target}</div>
+                  <div><span className="block font-bold">Cam</span>{plan.mesh_camera_target}</div>
+                  <div><span className="block font-bold">CNTT</span>{plan.cntt_target}</div>
+                </div>
 
-              {plan.status === 'rejected' && (
-                <div className="text-xs text-red-600 bg-red-50 p-2 rounded mt-2">
-                  <strong>Lý do từ chối:</strong> {plan.returned_reason}
-                </div>
-              )}
-              {plan.status === 'approved' && plan.approved_by && (
-                <div className="text-xs text-green-700 mt-2 flex justify-end">
-                   Duyệt bởi {plan.approved_by} lúc {new Date(plan.approved_at || '').toLocaleString('vi-VN')}
-                </div>
-              )}
-            </div>
-          ))
+                {plan.status === 'rejected' && (
+                  <div className="text-xs text-red-600 bg-red-50 p-2 rounded mt-2">
+                    <strong>Lý do từ chối:</strong> {plan.returned_reason}
+                  </div>
+                )}
+                {plan.status === 'approved' && plan.approved_by && (
+                  <div className="text-xs text-green-700 mt-2 flex justify-end">
+                     Duyệt bởi {plan.approved_by} lúc {new Date(plan.approved_at || '').toLocaleString('vi-VN')}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </div>
     </div>
