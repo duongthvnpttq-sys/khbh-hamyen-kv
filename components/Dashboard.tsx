@@ -1,9 +1,10 @@
+
 import React, { useMemo } from 'react';
 import { User, Plan } from '../types';
-import { Users, FileText, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Users, FileText, CheckCircle, Clock, TrendingUp, TrendingDown, Target, Zap, Search } from 'lucide-react';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  PieChart, Pie, Cell, ComposedChart, Line
 } from 'recharts';
 
 interface DashboardProps {
@@ -13,218 +14,271 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ users, plans }) => {
   const stats = useMemo(() => {
-    const totalUsers = users.length;
-    const activeUsers = users.filter(u => u.is_active).length;
-    
-    // Calculate current week
-    const now = new Date();
-    const oneJan = new Date(now.getFullYear(), 0, 1);
-    const numberOfDays = Math.floor((now.getTime() - oneJan.getTime()) / (24 * 60 * 60 * 1000));
-    const currentWeekNum = Math.ceil((now.getDay() + 1 + numberOfDays) / 7);
-    const currentWeekStr = `Tuần ${currentWeekNum}`;
-
-    const weekPlans = plans.filter(p => p.week_number === currentWeekStr);
-    const completedPlans = plans.filter(p => p.status === 'completed');
-    const pendingPlans = plans.filter(p => p.status === 'pending');
-    
-    // Performance Data
+    // 1. Weekly Performance Data (Aggregating all services)
     const weekDataMap: Record<string, { week: string, target: number, result: number }> = {};
-    
-    plans.filter(p => p.status === 'completed' || p.status === 'approved').forEach(p => {
-      // Initialize if empty
+    plans.forEach(p => {
       if (!weekDataMap[p.week_number]) {
         weekDataMap[p.week_number] = { week: p.week_number, target: 0, result: 0 };
       }
+      // Summing all targets including Mesh+Cam
+      weekDataMap[p.week_number].target += (p.sim_target || 0) + (p.fiber_target || 0) + (p.mytv_target || 0) + (p.mesh_camera_target || 0) + (p.cntt_target || 0);
       
-      const totalTarget = (p.sim_target || 0) + (p.vas_target || 0) + (p.fiber_target || 0) + (p.mytv_target || 0) + (p.mesh_camera_target || 0) + (p.cntt_target || 0);
-      
-      // Only count results for completed plans
-      let totalResult = 0;
       if (p.status === 'completed') {
-        totalResult = (p.sim_result || 0) + (p.vas_result || 0) + (p.fiber_result || 0) + (p.mytv_result || 0) + (p.mesh_camera_result || 0) + (p.cntt_result || 0);
+        // Summing all results including Mesh+Cam
+        weekDataMap[p.week_number].result += (p.sim_result || 0) + (p.fiber_result || 0) + (p.mytv_result || 0) + (p.mesh_camera_result || 0) + (p.cntt_result || 0);
       }
-      
-      weekDataMap[p.week_number].target += totalTarget;
-      weekDataMap[p.week_number].result += totalResult;
     });
 
-    const chartData = Object.values(weekDataMap).sort((a, b) => {
-        // Safe parsing for week number "Tuần X"
-        const getWeekNum = (str: string) => {
-          const match = str.match(/\d+/);
-          return match ? parseInt(match[0]) : 0;
-        };
-        return getWeekNum(a.week) - getWeekNum(b.week);
-    }).slice(-8);
+    const performanceChart = Object.values(weekDataMap).sort((a, b) => {
+      const getNum = (s: string) => parseInt(s.match(/\d+/)?.toString() || '0');
+      return getNum(a.week) - getNum(b.week);
+    }).slice(-6);
 
-    // Product Distribution
-    const productData = [
-      { name: 'SIM', value: 0 },
-      { name: 'VAS', value: 0 },
-      { name: 'Fiber', value: 0 },
-      { name: 'MyTV', value: 0 },
-      { name: 'Mesh/Cam', value: 0 },
-      { name: 'CNTT', value: 0 },
+    // 2. Status Distribution
+    const statusData = [
+      { name: 'Đã hoàn thành', value: plans.filter(p => p.status === 'completed').length, color: '#00D1FF' },
+      { name: 'Đã duyệt', value: plans.filter(p => p.status === 'approved').length, color: '#8B5CF6' },
+      { name: 'Chờ duyệt', value: plans.filter(p => p.status === 'pending').length, color: '#EF4444' },
+    ].filter(d => d.value > 0);
+
+    // 3. Mini Sparkline Data for Cards (Including Mesh/Cam)
+    const products = [
+      { name: 'SIM Mobile', key: 'sim', color: '#3b82f6' },
+      { name: 'Fiber Internet', key: 'fiber', color: '#f43f5e' },
+      { name: 'Truyền hình MyTV', key: 'mytv', color: '#a855f7' },
+      { name: 'Dịch vụ Mesh/Cam', key: 'mesh_camera', color: '#f59e0b' }, // Added Mesh+Cam
+      { name: 'Dịch vụ CNTT', key: 'cntt', color: '#10b981' }
     ];
 
-    completedPlans.forEach(p => {
-      productData[0].value += p.sim_result || 0;
-      productData[1].value += p.vas_result || 0;
-      productData[2].value += p.fiber_result || 0;
-      productData[3].value += p.mytv_result || 0;
-      productData[4].value += p.mesh_camera_result || 0;
-      productData[5].value += p.cntt_result || 0;
+    const productSparklines = products.map(prod => {
+      const data = performanceChart.map(w => {
+        const weekPlans = plans.filter(p => p.week_number === w.week);
+        const target = weekPlans.reduce((sum, p) => sum + ((p as any)[`${prod.key}_target`] || 0), 0);
+        const result = weekPlans.filter(p => p.status === 'completed').reduce((sum, p) => sum + ((p as any)[`${prod.key}_result`] || 0), 0);
+        return { week: w.week, target, result };
+      });
+      const totalT = data.reduce((s, d) => s + d.target, 0);
+      const totalR = data.reduce((s, d) => s + d.result, 0);
+      return { ...prod, data, totalTarget: totalT, totalResult: totalR };
     });
 
-    // Filter out zero values for cleaner Pie Chart
-    const filteredProductData = productData.filter(d => d.value > 0);
+    // 4. Per-Employee Ranking (Best/Worst)
+    const employeeStats = users.filter(u => u.role === 'employee').map(u => {
+      const userPlans = plans.filter(p => p.employee_id === u.employee_id);
+      const target = userPlans.reduce((sum, p) => sum + (p.sim_target + p.fiber_target + p.mytv_target + p.mesh_camera_target + p.cntt_target), 0);
+      const result = userPlans.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.sim_result + p.fiber_result + p.mytv_result + p.mesh_camera_result + p.cntt_result), 0);
+      const ratio = target > 0 ? (result / target) * 100 : 0;
+      return { 
+        name: u.employee_name, 
+        avatar: u.avatar, 
+        ratio: Math.round(ratio),
+        target,
+        result
+      };
+    });
 
-    return {
-      totalUsers,
-      activeUsers,
-      weekPlansCount: weekPlans.length,
-      approvedWeekPlans: weekPlans.filter(p => p.status === 'approved' || p.status === 'completed').length,
-      completedCount: completedPlans.length,
-      pendingCount: pendingPlans.length,
-      completionRate: plans.length > 0 ? Math.round((completedPlans.length / plans.length) * 100) : 0,
-      chartData,
-      productData: filteredProductData.length > 0 ? filteredProductData : [{ name: 'Chưa có dữ liệu', value: 1 }]
-    };
+    const topEmployees = [...employeeStats].sort((a, b) => b.ratio - a.ratio).slice(0, 3);
+    const bottomEmployees = [...employeeStats].filter(e => e.target > 0).sort((a, b) => a.ratio - b.ratio).slice(0, 3);
+
+    return { performanceChart, statusData, productSparklines, topEmployees, bottomEmployees };
   }, [users, plans]);
 
-  const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#6366F1'];
-  const GRAY_COLOR = '#E5E7EB';
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">Tổng Quan Hệ Thống</h2>
-          <p className="text-gray-600">Chào mừng bạn quay trở lại!</p>
-        </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500 hover:shadow-md transition-all">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Tổng Người Dùng</p>
-              <h3 className="text-3xl font-bold text-gray-800">{stats.totalUsers}</h3>
-              <p className="text-xs text-gray-500 mt-1">Đang hoạt động: <span className="text-green-600 font-medium">{stats.activeUsers}</span></p>
-            </div>
-            <div className="bg-blue-100 p-2 rounded-lg">
-              <Users className="text-blue-600" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500 hover:shadow-md transition-all">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Kế Hoạch Tuần</p>
-              <h3 className="text-3xl font-bold text-gray-800">{stats.weekPlansCount}</h3>
-              <p className="text-xs text-gray-500 mt-1">Đã duyệt: <span className="text-green-600 font-medium">{stats.approvedWeekPlans}</span></p>
-            </div>
-            <div className="bg-green-100 p-2 rounded-lg">
-              <FileText className="text-green-600" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-yellow-500 hover:shadow-md transition-all">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Đã Hoàn Thành</p>
-              <h3 className="text-3xl font-bold text-gray-800">{stats.completedCount}</h3>
-              <p className="text-xs text-gray-500 mt-1">Tỷ lệ: <span className="text-yellow-600 font-medium">{stats.completionRate}%</span></p>
-            </div>
-            <div className="bg-yellow-100 p-2 rounded-lg">
-              <CheckCircle className="text-yellow-600" size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-6 border-l-4 border-purple-500 hover:shadow-md transition-all">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-1">Chờ Duyệt</p>
-              <h3 className="text-3xl font-bold text-gray-800">{stats.pendingCount}</h3>
-              <p className="text-xs text-gray-500 mt-1">Cần xử lý ngay</p>
-            </div>
-            <div className="bg-purple-100 p-2 rounded-lg">
-              <Clock className="text-purple-600" size={24} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">Hiệu Suất Theo Tuần</h3>
-          <div className="h-80 w-full">
-            {stats.chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={stats.chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                  <XAxis dataKey="week" stroke="#9CA3AF" tick={{fontSize: 12}} />
-                  <YAxis stroke="#9CA3AF" tick={{fontSize: 12}} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                  />
-                  <Legend />
-                  <Line type="monotone" dataKey="target" name="Chỉ tiêu" stroke="#EF4444" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
-                  <Line type="monotone" dataKey="result" name="Thực hiện" stroke="#10B981" strokeWidth={3} dot={{r: 4}} activeDot={{r: 6}} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-full flex items-center justify-center text-gray-400">
-                Chưa có dữ liệu để hiển thị
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">Phân Bố Sản Phẩm (Hoàn thành)</h3>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={stats.productData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {stats.productData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.name === 'Chưa có dữ liệu' ? GRAY_COLOR : COLORS[index % COLORS.length]} 
-                    />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={36} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Alerts Section */}
-      {stats.pendingCount > 0 && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-r-lg flex items-start gap-3">
-          <AlertTriangle className="text-yellow-600 flex-shrink-0" size={24} />
+    <div className="min-h-full dashboard-dark text-white p-6 -m-4 md:-m-6 overflow-x-hidden">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h4 className="font-bold text-yellow-800">Cần chú ý</h4>
-            <p className="text-yellow-700 text-sm">Hiện có {stats.pendingCount} kế hoạch đang chờ phê duyệt. Vui lòng kiểm tra tab "Kế Hoạch" hoặc "Phê Duyệt".</p>
+            <h2 className="text-2xl font-black tracking-tight uppercase">Thống Kê Tổng Hợp</h2>
+            <p className="text-gray-400 text-xs font-medium tracking-widest uppercase mt-1">Hệ thống quản lý hiệu năng VNPT</p>
+          </div>
+          {/* Ô nhập liệu tìm kiếm tông mầu sáng (White backdrop) */}
+          <div className="flex items-center gap-3 bg-white/95 backdrop-blur-xl px-4 py-2.5 rounded-2xl shadow-2xl border border-white/20">
+            <Search size={18} className="text-blue-600" />
+            <input 
+              type="text" 
+              placeholder="Tra cứu nhanh..." 
+              className="bg-transparent border-none outline-none text-sm w-48 md:w-64 text-slate-800 placeholder-slate-400 font-bold" 
+            />
           </div>
         </div>
-      )}
+
+        {/* Top KPI Cards (Neon Sparklines) - Adjusted to 5 columns on desktop */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {stats.productSparklines.map(prod => (
+            <div key={prod.key} className="glass-card rounded-2xl p-5 relative overflow-hidden group hover:border-white/20 transition-all">
+              <div className="flex justify-between items-start mb-2 relative z-10">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{prod.name}</span>
+                <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase ${prod.totalResult >= prod.totalTarget ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                  {prod.totalTarget > 0 ? Math.round((prod.totalResult / prod.totalTarget) * 100) : 0}%
+                </span>
+              </div>
+              <div className="flex items-baseline gap-2 mb-2 relative z-10">
+                <h3 className="text-2xl font-black tracking-tighter">{prod.totalResult}</h3>
+                <span className="text-[10px] text-gray-500 font-bold">/ {prod.totalTarget} KPI</span>
+              </div>
+              <div className="h-16 w-full -mb-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={prod.data}>
+                    <defs>
+                      <linearGradient id={`grad-${prod.key}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={prod.color} stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor={prod.color} stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <Area type="monotone" dataKey="result" stroke={prod.color} strokeWidth={3} fillOpacity={1} fill={`url(#grad-${prod.key})`} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Middle Charts Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Main Chart: Target vs Result */}
+          <div className="lg:col-span-2 glass-card rounded-3xl p-8">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-lg font-black uppercase tracking-tight">Thực Hiện vs Chỉ Tiêu (Tuần)</h3>
+              <div className="flex gap-6">
+                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]"></span><span className="text-[10px] text-gray-400 font-black uppercase">Chỉ tiêu</span></div>
+                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]"></span><span className="text-[10px] text-gray-400 font-black uppercase">Kết quả</span></div>
+              </div>
+            </div>
+            <div className="h-80 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={stats.performanceChart}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.03)" />
+                  <XAxis dataKey="week" stroke="#4B5563" tick={{fontSize: 10, fontWeight: 700}} axisLine={false} tickLine={false} dy={10} />
+                  <YAxis stroke="#4B5563" tick={{fontSize: 10, fontWeight: 700}} axisLine={false} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#1c2438', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}
+                    itemStyle={{ fontSize: '12px', fontWeight: 700 }}
+                  />
+                  <Bar dataKey="target" name="Chỉ tiêu" fill="#f43f5e" radius={[6, 6, 0, 0]} barSize={25} opacity={0.4} />
+                  <Line type="monotone" dataKey="result" name="Thực hiện" stroke="#3b82f6" strokeWidth={5} shadow="0 0 10px rgba(59,130,246,0.5)" dot={{r: 6, fill: '#3b82f6', strokeWidth: 3, stroke: '#1c2438'}} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Status Distribution */}
+          <div className="glass-card rounded-3xl p-8">
+            <h3 className="text-lg font-black uppercase tracking-tight mb-8">Trạng Thái Kế Hoạch</h3>
+            <div className="h-64 w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stats.statusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={75}
+                    outerRadius={105}
+                    paddingAngle={10}
+                    dataKey="value"
+                    stroke="none"
+                  >
+                    {stats.statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} style={{ filter: `drop-shadow(0 0 5px ${entry.color}88)` }} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-3xl font-black text-white">{plans.length}</span>
+                <span className="text-[10px] uppercase text-gray-500 font-black tracking-widest mt-1">Báo cáo</span>
+              </div>
+            </div>
+            <div className="mt-6 space-y-4">
+              {stats.statusData.map((d, i) => (
+                <div key={i} className="flex justify-between items-center text-xs">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }}></span>
+                    <span className="text-gray-400 font-bold uppercase tracking-tighter">{d.name}</span>
+                  </div>
+                  <span className="font-black text-white">{d.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Section: Top/Bottom Performers */}
+        <div className="grid grid-cols-1 gap-6">
+          <div className="glass-card rounded-3xl p-8">
+            <div className="flex items-center justify-between mb-10">
+              <h3 className="text-xl font-black uppercase tracking-tight flex items-center gap-3">
+                <Zap size={24} className="text-yellow-400 fill-yellow-400 animate-pulse" />
+                Bảng Xếp Hạng Hiệu Quả
+              </h3>
+              <div className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] bg-white/5 px-4 py-2 rounded-full">Dữ liệu thời gian thực</div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
+              {/* Top Group */}
+              <div>
+                <div className="flex items-center gap-3 mb-6 text-emerald-400 border-b border-emerald-500/20 pb-4">
+                  <TrendingUp size={22} />
+                  <span className="text-base font-black uppercase tracking-widest">Nhân viên xuất sắc</span>
+                </div>
+                <div className="space-y-5">
+                  {stats.topEmployees.length > 0 ? stats.topEmployees.map((emp, i) => (
+                    <div key={i} className="flex items-center justify-between bg-white/5 p-5 rounded-2xl border border-white/5 hover:bg-white/10 hover:border-emerald-500/30 transition-all cursor-pointer group">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center overflow-hidden border border-emerald-500/30 transform group-hover:scale-110 transition-transform">
+                          {emp.avatar ? <img src={emp.avatar} className="w-full h-full object-cover" /> : <span className="font-black text-emerald-400 text-lg">{emp.name[0]}</span>}
+                        </div>
+                        <div>
+                          <p className="font-black text-base text-white">{emp.name}</p>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">{emp.result} KPI đạt được</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-emerald-400 tracking-tighter">{emp.ratio}%</p>
+                        <div className="w-28 h-2 bg-gray-800 rounded-full mt-2 overflow-hidden border border-white/5">
+                          <div className="bg-emerald-500 h-full rounded-full shadow-[0_0_10px_#10b981]" style={{ width: `${emp.ratio}%` }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )) : <p className="text-gray-500 text-sm font-bold uppercase italic">Chưa có dữ liệu xếp hạng</p>}
+                </div>
+              </div>
+
+              {/* Bottom Group */}
+              <div>
+                <div className="flex items-center gap-3 mb-6 text-rose-400 border-b border-rose-500/20 pb-4">
+                  <TrendingDown size={22} />
+                  <span className="text-base font-black uppercase tracking-widest">Cần cải thiện hiệu quả</span>
+                </div>
+                <div className="space-y-5">
+                  {stats.bottomEmployees.length > 0 ? stats.bottomEmployees.map((emp, i) => (
+                    <div key={i} className="flex items-center justify-between bg-white/5 p-5 rounded-2xl border border-white/5 hover:bg-white/10 hover:border-rose-500/30 transition-all cursor-pointer opacity-80 hover:opacity-100 group">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-rose-500/20 flex items-center justify-center overflow-hidden border border-rose-500/30 transform group-hover:scale-110 transition-transform">
+                          {emp.avatar ? <img src={emp.avatar} className="w-full h-full object-cover" /> : <span className="font-black text-rose-400 text-lg">{emp.name[0]}</span>}
+                        </div>
+                        <div>
+                          <p className="font-black text-base text-white">{emp.name}</p>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">Chỉ tiêu: {emp.target} KPI</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-black text-rose-400 tracking-tighter">{emp.ratio}%</p>
+                        <div className="w-28 h-2 bg-gray-800 rounded-full mt-2 overflow-hidden border border-white/5">
+                          <div className="bg-rose-500 h-full rounded-full shadow-[0_0_10px_#f43f5e]" style={{ width: `${emp.ratio}%` }}></div>
+                        </div>
+                      </div>
+                    </div>
+                  )) : <p className="text-gray-500 text-sm font-bold uppercase italic">Chưa có dữ liệu xếp hạng</p>}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

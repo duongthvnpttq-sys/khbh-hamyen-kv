@@ -1,3 +1,4 @@
+
 export type Role = 'admin' | 'manager' | 'employee';
 
 export interface User {
@@ -24,6 +25,7 @@ export interface Plan {
   date: string;
   area: string; // Specific area for this plan
   work_content: string;
+  collaborators?: string; // New field
   
   // Targets
   sim_target: number;
@@ -33,6 +35,7 @@ export interface Plan {
   mesh_camera_target: number;
   cntt_target: number;
   revenue_cntt_target: number;
+  other_services_target?: number; // New field
   
   time_schedule: string;
   implementation_method: string;
@@ -45,6 +48,7 @@ export interface Plan {
   mesh_camera_result: number;
   cntt_result: number;
   revenue_cntt_result: number;
+  other_services_result?: number; // New field
   
   customers_contacted: number;
   contracts_signed: number;
@@ -60,6 +64,9 @@ export interface Plan {
   attitude_score?: string;
   discipline_score?: string;
   effectiveness_score?: string;
+  evidence_photo?: string; // New: Proof of results
+  bonus_score?: number;     // New: Additive points
+  penalty_score?: number;   // New: Subtractive points
   
   // Metadata
   approved_by?: string;
