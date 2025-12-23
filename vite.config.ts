@@ -3,18 +3,17 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  base: './', // Đảm bảo đường dẫn tương đối để Vercel không bị lỗi 404 assets
   build: {
-    // 1. Chia nhỏ các thư viện nặng thành các khối riêng biệt
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            return id.toString().split('node_modules/')[1].split('/')[0].toString();
-          }
-        },
-      },
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-utils': ['xlsx', 'jspdf'],
+          'vendor-charts': ['recharts']
+        }
+      }
     },
-    // 2. Điều chỉnh giới hạn cảnh báo kích thước khối (đơn vị: kB)
-    chunkSizeWarningLimit: 2000, 
-  },
+    chunkSizeWarningLimit: 2000
+  }
 });
