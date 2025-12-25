@@ -1,134 +1,124 @@
 
+import { createClient } from '@supabase/supabase-js';
 import { User, Plan, SystemData } from '../types';
+import bcrypt from 'bcryptjs';
 
-const STORAGE_KEY = 'vnpt_system_data';
+const SUPABASE_URL = 'https://oppgitgwutlpqwmcyfxj.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_lzQALnCDYyLrGv__8KMhhQ_MYvRGlI8';
 
-const SEED_USERS: User[] = [
-  {
-    id: 'ADMIN_001',
-    employee_id: 'ADMIN_001',
-    employee_name: 'Administrator',
-    position: 'Quản trị viên hệ thống',
-    management_area: 'Toàn bộ hệ thống',
-    username: 'admin',
-    password: 'admin123',
-    role: 'admin',
-    is_active: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'MNG_001',
-    employee_id: 'MNG_001',
-    employee_name: 'Lê Văn Cường',
-    position: 'Tổ trưởng kinh doanh',
-    management_area: 'Toàn huyện',
-    username: 'levancuong',
-    password: 'manager123',
-    role: 'manager',
-    is_active: true,
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'EMP_001',
-    employee_id: 'EMP_001',
-    employee_name: 'Nguyễn Văn An',
-    position: 'Nhân viên kinh doanh',
-    management_area: 'Xã Yên Thuận',
-    username: 'nguyenvanan',
-    password: '123456',
-    role: 'employee',
-    is_active: true,
-    created_at: new Date().toISOString()
-  }
-];
+// Khởi tạo client
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const generateId = () => {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
 };
 
 export const dataService = {
-  init: (): SystemData => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const data = JSON.parse(stored);
-      // Đảm bảo plans luôn trống nếu người dùng muốn làm mới hoàn toàn
-      // Hoặc có thể giữ lại users nhưng xóa plans. Ở đây ta giữ logic mặc định nhưng reset plans.
-      return data;
+  // Fetch all data from Supabase
+  getData: async (): Promise<{ data: SystemData; error?: string }> => {
+    try {
+      const [usersResponse, plansResponse] = await Promise.all([
+        supabase.from('users').select('*'),
+        supabase.from('plans').select('*')
+      ]);
+
+      if (usersResponse.error) throw new Error(`Users Error: ${usersResponse.error.message}`);
+      if (plansResponse.error) throw new Error(`Plans Error: ${plansResponse.error.message}`);
+
+      return {
+        data: {
+          users: usersResponse.data as User[] || [],
+          plans: plansResponse.data as Plan[] || []
+        }
+      };
+    } catch (error: any) {
+      console.error('Lỗi kết nối Supabase:', error);
+      return { 
+        data: { users: [], plans: [] },
+        error: error.message || 'Không thể kết nối đến máy chủ dữ liệu.'
+      };
     }
-    const initialData: SystemData = {
-      users: SEED_USERS,
-      plans: [] // Khởi tạo với danh sách kế hoạch trống
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
-    return initialData;
   },
 
-  getData: (): SystemData => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    const data: SystemData = stored ? JSON.parse(stored) : { users: [], plans: [] };
-    return data;
-  },
+  // Create a new user with hashed password
+  createUser: async (user: Omit<User, 'id' | 'created_at'>): Promise<User | null> => {
+    // Hash the password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = user.password ? await bcrypt.hash(user.password, salt) : '';
 
-  saveData: (data: SystemData) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  },
-
-  isUsernameTaken: (username: string): boolean => {
-    const data = dataService.getData();
-    return data.users.some(u => u.username.toLowerCase() === username.toLowerCase());
-  },
-
-  createUser: (user: Omit<User, 'id' | 'created_at'>): User => {
-    const data = dataService.getData();
     const newUser: User = {
       ...user,
+      password: hashedPassword, // Store hash instead of plain text
       id: generateId(),
       created_at: new Date().toISOString()
     };
-    data.users.push(newUser);
-    dataService.saveData(data);
-    return newUser;
-  },
 
-  updateUser: (user: User) => {
-    const data = dataService.getData();
-    const index = data.users.findIndex(u => u.id === user.id);
-    if (index !== -1) {
-      data.users[index] = user;
-      dataService.saveData(data);
+    const { data, error } = await supabase.from('users').insert([newUser]).select();
+    
+    if (error) {
+      console.error('Error creating user:', error);
+      return null;
     }
+    return data?.[0] as User;
   },
 
-  deleteUser: (id: string) => {
-    const data = dataService.getData();
-    data.users = data.users.filter(u => u.id !== id);
-    dataService.saveData(data);
+  // Update an existing user
+  updateUser: async (user: User) => {
+    // Note: This function assumes password is NOT being updated here. 
+    // If password update feature is added, hashing logic is needed here too.
+    const { error } = await supabase
+      .from('users')
+      .update(user)
+      .eq('id', user.id);
+      
+    if (error) console.error('Error updating user:', error);
   },
 
-  createPlan: (plan: Omit<Plan, 'id' | 'created_at'>): Plan => {
-    const data = dataService.getData();
+  // Delete a user and their associated plans
+  deleteUser: async (id: string) => {
+    // First fetch the user to get employee_id for plan deletion
+    const { data: userData } = await supabase.from('users').select('employee_id').eq('id', id).single();
+    
+    if (userData) {
+      // Delete user's plans
+      await supabase.from('plans').delete().eq('employee_id', userData.employee_id);
+    }
+    
+    // Delete the user
+    const { error } = await supabase.from('users').delete().eq('id', id);
+    if (error) console.error('Error deleting user:', error);
+  },
+
+  // Create a new plan
+  createPlan: async (plan: Omit<Plan, 'id' | 'created_at'>): Promise<Plan | null> => {
     const newPlan: Plan = {
       ...plan,
       id: generateId(),
       created_at: new Date().toISOString()
     };
-    data.plans.push(newPlan);
-    dataService.saveData(data);
-    return newPlan;
-  },
 
-  updatePlan: (plan: Plan) => {
-    const data = dataService.getData();
-    const index = data.plans.findIndex(p => p.id === plan.id);
-    if (index !== -1) {
-      data.plans[index] = plan;
-      dataService.saveData(data);
+    const { data, error } = await supabase.from('plans').insert([newPlan]).select();
+    
+    if (error) {
+      console.error('Error creating plan:', error);
+      return null;
     }
+    return data?.[0] as Plan;
   },
 
-  deletePlan: (id: string) => {
-    const data = dataService.getData();
-    data.plans = data.plans.filter(p => p.id !== id);
-    dataService.saveData(data);
+  // Update an existing plan
+  updatePlan: async (plan: Plan) => {
+    const { error } = await supabase
+      .from('plans')
+      .update(plan)
+      .eq('id', plan.id);
+
+    if (error) console.error('Error updating plan:', error);
+  },
+
+  // Delete a plan
+  deletePlan: async (id: string) => {
+    const { error } = await supabase.from('plans').delete().eq('id', id);
+    if (error) console.error('Error deleting plan:', error);
   }
 };

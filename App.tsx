@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, Plan, SystemData } from './types';
 import { dataService } from './services/dataService';
@@ -10,16 +11,32 @@ import { PlanApproval } from './components/PlanApproval';
 import { DailyReport } from './components/DailyReport';
 import { RatingEvaluation } from './components/RatingEvaluation';
 import { SummaryExport } from './components/SummaryExport';
+import { AlertTriangle } from 'lucide-react';
+import bcrypt from 'bcryptjs';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [systemData, setSystemData] = useState<SystemData>({ users: [], plans: [] });
   const [isLoading, setIsLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  // Function to load data from Supabase
+  const refreshData = async () => {
+    const response = await dataService.getData();
+    if (response.error) {
+      setConnectionError(response.error);
+    } else {
+      setSystemData(response.data);
+      setConnectionError(null);
+    }
+    setIsDataLoading(false);
+  };
 
   useEffect(() => {
-    const data = dataService.init();
-    setSystemData(data);
+    // Initial data load
+    refreshData();
     
     // Check session
     const savedUser = localStorage.getItem('current_user');
@@ -28,21 +45,38 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const refreshData = () => {
-    // Force a new object reference to ensure React triggers a re-render
-    const newData = dataService.getData();
-    setSystemData({ ...newData });
-  };
-
   const handleLogin = async (username: string, pass: string): Promise<boolean> => {
     setIsLoading(true);
-    // Simulate API delay
-    await new Promise(r => setTimeout(r, 600));
     
-    const user = systemData.users.find(u => u.username === username && u.password === pass);
+    // Ensure we have the latest data before checking login
+    const response = await dataService.getData();
+    
+    if (response.error) {
+      setConnectionError(response.error);
+      setIsLoading(false);
+      return false;
+    }
+    
+    setSystemData(response.data);
+    setConnectionError(null);
+    
+    // Find user by username only
+    const user = response.data.users.find(u => u.username === username);
+    
+    let isAuthenticated = false;
+
+    if (user && user.is_active && user.password) {
+      // Check if password is a hash (starts with $2)
+      if (user.password.startsWith('$2')) {
+        isAuthenticated = await bcrypt.compare(pass, user.password);
+      } else {
+        // Fallback for legacy plain text passwords (temporary support)
+        isAuthenticated = user.password === pass;
+      }
+    }
     
     setIsLoading(false);
-    if (user && user.is_active) {
+    if (isAuthenticated && user) {
       setCurrentUser(user);
       localStorage.setItem('current_user', JSON.stringify(user));
       setActiveTab('dashboard');
@@ -57,28 +91,67 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
-  // CRUD Wrappers
-  const handleAddUser = (user: Omit<User, 'id' | 'created_at'>) => {
-    dataService.createUser(user);
-    refreshData();
+  // CRUD Wrappers - Now Async
+  const handleAddUser = async (user: Omit<User, 'id' | 'created_at'>) => {
+    await dataService.createUser(user);
+    await refreshData();
   };
-  const handleUpdateUser = (user: User) => {
-    dataService.updateUser(user);
-    refreshData();
+  const handleUpdateUser = async (user: User) => {
+    await dataService.updateUser(user);
+    await refreshData();
   };
-  const handleDeleteUser = (id: string) => {
-    dataService.deleteUser(id);
-    refreshData();
+  const handleDeleteUser = async (id: string) => {
+    await dataService.deleteUser(id);
+    await refreshData();
   };
 
-  const handleAddPlan = (plan: Omit<Plan, 'id' | 'created_at'>) => {
-    dataService.createPlan(plan);
-    refreshData();
+  const handleAddPlan = async (plan: Omit<Plan, 'id' | 'created_at'>) => {
+    await dataService.createPlan(plan);
+    await refreshData();
   };
-  const handleUpdatePlan = (plan: Plan) => {
-    dataService.updatePlan(plan);
-    refreshData();
+  const handleUpdatePlan = async (plan: Plan) => {
+    await dataService.updatePlan(plan);
+    await refreshData();
   };
+
+  // Error Screen
+  if (connectionError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center border border-red-100">
+          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertTriangle size={32} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-800 mb-2">Lỗi Kết Nối</h2>
+          <p className="text-gray-600 mb-6 text-sm">{connectionError}</p>
+          <div className="bg-slate-50 p-4 rounded-lg text-left text-xs text-slate-500 mb-6">
+            <p className="font-bold mb-1">Hướng dẫn khắc phục:</p>
+            <ol className="list-decimal pl-4 space-y-1">
+              <li>Mở file <code>services/dataService.ts</code></li>
+              <li>Thay thế <code>YOUR_SUPABASE_URL</code> bằng URL dự án của bạn</li>
+              <li>Thay thế <code>YOUR_SUPABASE_ANON_KEY</code> bằng Key của bạn</li>
+              <li>Đảm bảo đã chạy Script SQL tạo bảng trong Supabase</li>
+            </ol>
+          </div>
+          <button 
+            onClick={() => { setConnectionError(null); setIsDataLoading(true); refreshData(); }}
+            className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition"
+          >
+            Thử lại
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading state while initial data fetches
+  if (isDataLoading && !currentUser) {
+    return (
+      <div className="min-h-screen flex items-center justify-center vnpt-gradient">
+        <div className="text-white text-xl font-bold animate-pulse">Đang tải dữ liệu hệ thống...</div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <Login onLogin={handleLogin} isLoading={isLoading} />;

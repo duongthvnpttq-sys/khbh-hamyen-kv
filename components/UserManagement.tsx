@@ -2,7 +2,6 @@
 import React, { useState, useRef } from 'react';
 import { User, Role } from '../types';
 import { Trash2, Lock, Unlock, UserPlus, Shield, Check, Camera, User as UserIcon, UploadCloud, AlertCircle, Image as ImageIcon } from 'lucide-react';
-import { dataService } from '../services/dataService';
 
 interface UserManagementProps {
   currentUser: User;
@@ -90,7 +89,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, use
       return;
     }
 
-    if (dataService.isUsernameTaken(formData.username)) {
+    // Check duplicate username using props instead of synchronous service call
+    const isTaken = users.some(u => u.username.toLowerCase() === formData.username.toLowerCase());
+    if (isTaken) {
       setErrorMsg('Tên đăng nhập đã tồn tại trong hệ thống');
       return;
     }
@@ -111,7 +112,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, use
       role: 'employee',
     });
     if (fileInputRef.current) fileInputRef.current.value = '';
-    alert('Thêm người dùng thành công!');
+    alert('Đang thêm người dùng...');
   };
 
   const inputLightStyle = "w-full bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm focus:border-blue-400 focus:ring-4 focus:ring-blue-50/50 outline-none transition-all text-slate-800 placeholder-slate-400 font-medium";
@@ -262,7 +263,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, use
           <div className="flex justify-end pt-6 border-t border-slate-50">
             <button 
               type="submit" 
-              className="w-full md:w-auto px-12 py-4 bg-blue-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-blue-700 transition shadow-xl shadow-blue-500/20 transform active:scale-95"
+              className="w-full md:w-auto px-12 py-4 bg-blue-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-500/20 transform active:scale-95"
             >
               Thêm Người Dùng
             </button>
@@ -295,7 +296,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, use
                 } else if (currentUser.role === 'manager') {
                   canModify = user.role === 'employee';
                 }
-                // Admin can modify themselves only for avatar, but not roles/delete (logic below handles buttons)
 
                 return (
                   <tr key={user.id} className="hover:bg-slate-50 transition-colors group">
@@ -333,8 +333,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, use
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                        {/* Avatar Update Button */}
+                      <div className="flex gap-2 justify-end opacity-100 group-hover:opacity-100 transition-opacity">
                         <button
                           type="button"
                           onClick={() => handleEditAvatarClick(user)}
@@ -359,7 +358,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, use
                           type="button"
                           disabled={!canModify || isCurrentUser}
                           onClick={() => {
-                            if (canModify && !isCurrentUser && window.confirm(`Bạn có chắc chắn muốn xóa người dùng "${user.employee_name}" không?`)) {
+                            if (canModify && !isCurrentUser && window.confirm(`CẢNH BÁO: Xóa người dùng "${user.employee_name}" sẽ xóa tất cả các kế hoạch và báo cáo liên quan. Bạn có chắc chắn muốn xóa vĩnh viễn không?`)) {
                               onDeleteUser(user.id);
                             }
                           }}
