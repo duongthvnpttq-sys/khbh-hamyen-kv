@@ -1,12 +1,12 @@
 
 import React, { useState, useRef } from 'react';
 import { User, Role } from '../types';
-import { Trash2, Lock, Unlock, UserPlus, Shield, Check, Camera, User as UserIcon, UploadCloud, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { Trash2, Lock, Unlock, UserPlus, Shield, Check, Camera, User as UserIcon, UploadCloud, AlertCircle, Image as ImageIcon, Loader2 } from 'lucide-react';
 
 interface UserManagementProps {
   currentUser: User;
   users: User[];
-  onAddUser: (user: Omit<User, 'id' | 'created_at'>) => void;
+  onAddUser: (user: Omit<User, 'id' | 'created_at'>) => Promise<void>;
   onUpdateUser: (user: User) => void;
   onDeleteUser: (id: string) => void;
 }
@@ -16,6 +16,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, use
   const editAvatarInputRef = useRef<HTMLInputElement>(null);
   const [targetUserForAvatar, setTargetUserForAvatar] = useState<User | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     employee_name: '',
     avatar: '',
@@ -80,7 +81,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, use
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -96,23 +97,31 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, use
       return;
     }
 
-    onAddUser({
-      ...formData,
-      employee_id: `EMP_${Date.now()}`,
-      is_active: true
-    });
+    try {
+      setIsSubmitting(true);
+      await onAddUser({
+        ...formData,
+        employee_id: `EMP_${Date.now()}_${Math.floor(Math.random()*100)}`, // Avoid ID collision
+        is_active: true
+      });
 
-    setFormData({
-      employee_name: '',
-      avatar: '',
-      position: '',
-      management_area: '',
-      username: '',
-      password: '',
-      role: 'employee',
-    });
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    alert('Đang thêm người dùng...');
+      setFormData({
+        employee_name: '',
+        avatar: '',
+        position: '',
+        management_area: '',
+        username: '',
+        password: '',
+        role: 'employee',
+      });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      alert('Thêm người dùng thành công!');
+    } catch (error: any) {
+      console.error(error);
+      setErrorMsg(error.message || 'Có lỗi xảy ra khi tạo người dùng.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const inputLightStyle = "w-full bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm focus:border-blue-400 focus:ring-4 focus:ring-blue-50/50 outline-none transition-all text-slate-800 placeholder-slate-400 font-medium";
@@ -263,9 +272,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUser, use
           <div className="flex justify-end pt-6 border-t border-slate-50">
             <button 
               type="submit" 
-              className="w-full md:w-auto px-12 py-4 bg-blue-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-500/20 transform active:scale-95"
+              disabled={isSubmitting}
+              className="w-full md:w-auto px-12 py-4 bg-blue-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-500/20 transform active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              Thêm Người Dùng
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  Đang xử lý...
+                </>
+              ) : (
+                'Thêm Người Dùng'
+              )}
             </button>
           </div>
         </form>

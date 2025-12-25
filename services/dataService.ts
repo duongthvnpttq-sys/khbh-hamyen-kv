@@ -10,7 +10,15 @@ const SUPABASE_KEY = 'sb_publishable_lzQALnCDYyLrGv__8KMhhQ_MYvRGlI8';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const generateId = () => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+  // Use crypto.randomUUID if available for robust UUID generation
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for older environments
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 };
 
 export const dataService = {
@@ -49,7 +57,7 @@ export const dataService = {
     const newUser: User = {
       ...user,
       password: hashedPassword, // Store hash instead of plain text
-      id: generateId(),
+      id: generateId(), // Changed to use UUID
       created_at: new Date().toISOString()
     };
 
@@ -57,7 +65,7 @@ export const dataService = {
     
     if (error) {
       console.error('Error creating user:', error);
-      return null;
+      throw error; // Throw error so UI can handle it
     }
     return data?.[0] as User;
   },
