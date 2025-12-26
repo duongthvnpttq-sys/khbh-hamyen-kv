@@ -82,6 +82,28 @@ export const dataService = {
     if (error) console.error('Error updating user:', error);
   },
 
+  // Change password for a user
+  changePassword: async (id: string, newPassword: string): Promise<boolean> => {
+    try {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+      const { error } = await supabase
+        .from('users')
+        .update({ password: hashedPassword })
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error changing password:', error);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error hashing password:', error);
+      return false;
+    }
+  },
+
   // Delete a user and their associated plans
   deleteUser: async (id: string) => {
     // First fetch the user to get employee_id for plan deletion

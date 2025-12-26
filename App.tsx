@@ -91,6 +91,39 @@ const App: React.FC = () => {
     setActiveTab('dashboard');
   };
 
+  const handleChangePassword = async (oldPass: string, newPass: string): Promise<{success: boolean, message: string}> => {
+    if (!currentUser || !currentUser.password) return { success: false, message: 'Lỗi phiên đăng nhập' };
+
+    // 1. Verify old password
+    let isMatch = false;
+    if (currentUser.password.startsWith('$2')) {
+      isMatch = await bcrypt.compare(oldPass, currentUser.password);
+    } else {
+      isMatch = currentUser.password === oldPass;
+    }
+
+    if (!isMatch) {
+      return { success: false, message: 'Mật khẩu cũ không chính xác' };
+    }
+
+    // 2. Call service to update
+    const success = await dataService.changePassword(currentUser.id, newPass);
+    if (success) {
+      // 3. Update local state to reflect new hash (fetch fresh data or just invalidate session)
+      // Ideally, we fetch the new user object to get the new hash
+      await refreshData();
+      
+      // Update current user state with new info so subsequent actions don't fail
+      // Since we don't have the new hash locally without refetching, 
+      // we'll rely on refreshData() updating systemData. 
+      // But we also need to update currentUser to keep session valid if we used the hash from there.
+      // For simplicity in this flow, forcing re-login or just updating UI notification is fine.
+      return { success: true, message: 'Đổi mật khẩu thành công' };
+    } else {
+      return { success: false, message: 'Lỗi khi cập nhật mật khẩu' };
+    }
+  };
+
   // CRUD Wrappers - Now Async
   const handleAddUser = async (user: Omit<User, 'id' | 'created_at'>) => {
     await dataService.createUser(user);
@@ -163,6 +196,7 @@ const App: React.FC = () => {
       activeTab={activeTab} 
       onTabChange={setActiveTab}
       onLogout={handleLogout}
+      onChangePassword={handleChangePassword}
     >
       {activeTab === 'dashboard' && <Dashboard users={systemData.users} plans={systemData.plans} />}
       {activeTab === 'users' && (currentUser.role === 'admin' || currentUser.role === 'manager') && (

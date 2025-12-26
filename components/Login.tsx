@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { User } from '../types';
-import { Lock, User as UserIcon, ShieldCheck } from 'lucide-react';
+import { Lock, User as UserIcon } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (username: string, password: string) => Promise<boolean>;
@@ -25,8 +26,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading }) => {
     <div className="min-h-screen flex items-center justify-center vnpt-gradient p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md animate-in fade-in zoom-in duration-500">
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-             <ShieldCheck size={40} className="text-white" />
+          <div className="flex justify-center mb-6">
+            <img 
+              src="https://upload.wikimedia.org/wikipedia/vi/thumb/e/e2/Logo_VNPT_VinaPhone.svg/1200px-Logo_VNPT_VinaPhone.svg.png" 
+              alt="VNPT Logo" 
+              className="h-20 object-contain hover:scale-105 transition-transform duration-300"
+            />
           </div>
           <h1 className="text-2xl font-bold text-gray-800 mb-2">QUẢN LÝ BÁN HÀNG</h1>
           <p className="text-blue-600 font-medium">VNPT Hàm Yên - Tuyên Quang</p>
@@ -66,11 +71,15 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading }) => {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-md hover:shadow-lg disabled:opacity-70 disabled:cursor-not-allowed uppercase tracking-wider"
           >
             {isLoading ? 'Đang đăng nhập...' : 'ĐĂNG NHẬP HỆ THỐNG'}
           </button>
         </form>
+        
+        <div className="mt-8 text-center text-xs text-gray-400">
+          © {new Date().getFullYear()} VNPT VinaPhone. All rights reserved.
+        </div>
       </div>
     </div>
   );
