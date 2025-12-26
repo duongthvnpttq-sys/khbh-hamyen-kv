@@ -77,9 +77,12 @@ export const Layout: React.FC<LayoutProps> = ({ currentUser, activeTab, onTabCha
             <div className="flex items-center gap-4">
               <div className="bg-white p-2 rounded-xl shadow-md hidden sm:block">
                  <img 
-                   src="https://upload.wikimedia.org/wikipedia/vi/thumb/e/e2/Logo_VNPT_VinaPhone.svg/1200px-Logo_VNPT_VinaPhone.svg.png" 
+                   src="https://hcom.vn/wp-content/uploads/2021/04/logo-VNPT.jpg" 
                    alt="VNPT Logo" 
-                   className="h-10 w-auto object-contain"
+                   className="h-16 w-auto object-contain"
+                   onError={(e) => {
+                     e.currentTarget.style.display = 'none'; // Ẩn nếu lỗi ở header
+                   }}
                  />
               </div>
               <div>

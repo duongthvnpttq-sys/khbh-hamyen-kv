@@ -28,9 +28,12 @@ export const Login: React.FC<LoginProps> = ({ onLogin, isLoading }) => {
         <div className="text-center mb-8">
           <div className="flex justify-center mb-6">
             <img 
-              src="https://upload.wikimedia.org/wikipedia/vi/thumb/e/e2/Logo_VNPT_VinaPhone.svg/1200px-Logo_VNPT_VinaPhone.svg.png" 
+              src="https://hcom.vn/wp-content/uploads/2021/04/logo-VNPT.jpg" 
               alt="VNPT Logo" 
-              className="h-20 object-contain hover:scale-105 transition-transform duration-300"
+              className="h-40 object-contain hover:scale-105 transition-transform duration-300"
+              onError={(e) => {
+                e.currentTarget.src = "https://via.placeholder.com/300x150.png?text=VNPT+Logo"; // Fallback nếu ảnh lỗi
+              }}
             />
           </div>
           <h1 className="text-2xl font-bold text-gray-800 mb-2">QUẢN LÝ BÁN HÀNG</h1>
