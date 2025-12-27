@@ -251,7 +251,7 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tuần báo cáo</label>
                 <select required className={inputLightStyle} value={formData.week_number} onChange={e => setFormData({...formData, week_number: e.target.value})}>
                   <option value="">Chọn tuần</option>
-                  {Array.from({length: 52}, (_, i) => <option key={i} value={`Tuần ${i+1}`}>Tuần {i+1}</option>)}
+                  {Array.from({length: 53}, (_, i) => <option key={i} value={`Tuần ${i+1}`}>Tuần {i+1}</option>)}
                 </select>
               </div>
               <div className="space-y-1.5">
