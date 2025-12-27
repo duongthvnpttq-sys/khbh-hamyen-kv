@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { User, Plan } from '../types';
 import * as XLSX from 'xlsx';
@@ -6,7 +5,7 @@ import {
   PlusCircle, Clock, CheckCircle, XCircle, 
   Download, Upload, Users as UsersIcon,
   Smartphone, Globe, Tv, Camera, Cpu, DollarSign, Plus,
-  CalendarOff
+  CalendarOff, History, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 interface WeeklyPlanProps {
@@ -15,8 +14,54 @@ interface WeeklyPlanProps {
   onAddPlan: (plan: Omit<Plan, 'id' | 'created_at'>) => void;
 }
 
+const statusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  pending: { label: 'Chờ duyệt', color: 'bg-amber-50 text-amber-700 border-amber-100', icon: <Clock size={12} /> },
+  approved: { label: 'Đã duyệt', color: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: <CheckCircle size={12} /> },
+  rejected: { label: 'Từ chối', color: 'bg-rose-50 text-rose-700 border-rose-100', icon: <XCircle size={12} /> },
+  completed: { label: 'Hoàn thành', color: 'bg-blue-50 text-blue-700 border-blue-100', icon: <CheckCircle size={12} /> }
+};
+
+const PlanCard = ({ plan }: { plan: Plan }) => (
+  <div className="bg-white rounded-3xl shadow-sm p-6 border border-slate-100 group hover:shadow-md transition-all relative overflow-hidden">
+    <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-2xl text-[10px] font-black uppercase border-b border-l flex items-center gap-1.5 ${statusConfig[plan.status]?.color || 'bg-gray-100 text-gray-600'}`}>
+        {statusConfig[plan.status]?.icon}
+        {statusConfig[plan.status]?.label || plan.status}
+    </div>
+    
+    <div className="mb-4 pt-2">
+        <div className="text-xs font-black text-blue-600 uppercase tracking-widest mb-1">{plan.week_number}</div>
+        <div className="text-xl font-black text-slate-800">{new Date(plan.date).toLocaleDateString('vi-VN')}</div>
+        <div className="text-sm font-bold text-slate-500 mt-1 uppercase flex items-center gap-1">{plan.area}</div>
+    </div>
+
+    <div className="bg-slate-50 p-4 rounded-2xl text-sm font-medium text-slate-700 italic leading-relaxed mb-4 border border-slate-100">
+      "{plan.work_content}"
+    </div>
+
+    <div className="grid grid-cols-4 gap-2">
+        <div className="text-center bg-blue-50/50 p-2 rounded-xl border border-blue-100/50">
+          <span className="text-[9px] font-black text-blue-500 block uppercase">SIM</span>
+          <span className="text-sm font-black text-blue-700">{plan.sim_target}</span>
+        </div>
+        <div className="text-center bg-emerald-50/50 p-2 rounded-xl border border-emerald-100/50">
+          <span className="text-[9px] font-black text-emerald-500 block uppercase">Fib</span>
+          <span className="text-sm font-black text-emerald-700">{plan.fiber_target}</span>
+        </div>
+        <div className="text-center bg-purple-50/50 p-2 rounded-xl border border-purple-100/50">
+          <span className="text-[9px] font-black text-purple-500 block uppercase">MyTV</span>
+          <span className="text-sm font-black text-purple-700">{plan.mytv_target}</span>
+        </div>
+        <div className="text-center bg-amber-50/50 p-2 rounded-xl border border-amber-100/50">
+          <span className="text-[9px] font-black text-amber-500 block uppercase">M/C</span>
+          <span className="text-sm font-black text-amber-700">{plan.mesh_camera_target}</span>
+        </div>
+    </div>
+  </div>
+);
+
 export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAddPlan }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const [formData, setFormData] = useState({
     week_number: '',
     date: '',
@@ -35,11 +80,26 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
     implementation_method: 'Cá nhân'
   });
 
+  // Lọc kế hoạch của user
   const myPlans = plans
     .filter(p => p.employee_id === currentUser.employee_id)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const existingDates = myPlans.map(p => p.date);
+
+  // --- LOGIC ẨN TUẦN CŨ ---
+  // Tính ngày Thứ 2 của tuần hiện tại
+  const now = new Date();
+  const currentDay = now.getDay(); // 0 là Chủ nhật
+  const distanceToMonday = (currentDay + 6) % 7; // Số ngày lùi về thứ 2
+  const mondayDate = new Date(now);
+  mondayDate.setDate(now.getDate() - distanceToMonday);
+  mondayDate.setHours(0, 0, 0, 0);
+
+  // Phân loại kế hoạch
+  const activePlans = myPlans.filter(p => new Date(p.date) >= mondayDate);
+  const archivedPlans = myPlans.filter(p => new Date(p.date) < mondayDate);
+  // -------------------------
 
   const handleDownloadTemplate = () => {
     const headers = [['Tuần', 'Ngày (YYYY-MM-DD)', 'Địa bàn', 'Nội dung', 'Người phối hợp', 'SIM', 'VAS', 'Fiber', 'MyTV', 'Mesh/Cam', 'DV CNTT', 'DT CNTT', 'DV Khác', 'Thời gian', 'Phương thức']];
@@ -211,14 +271,8 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
     alert("Kế hoạch đã được gửi đi.");
   };
 
-  const statusConfig = {
-    pending: { label: 'Chờ duyệt', color: 'bg-amber-50 text-amber-700 border-amber-100', icon: <Clock size={12} /> },
-    approved: { label: 'Đã duyệt', color: 'bg-emerald-50 text-emerald-700 border-emerald-100', icon: <CheckCircle size={12} /> },
-    rejected: { label: 'Từ chối', color: 'bg-rose-50 text-rose-700 border-rose-100', icon: <XCircle size={12} /> },
-    completed: { label: 'Hoàn thành', color: 'bg-blue-50 text-blue-700 border-blue-100', icon: <CheckCircle size={12} /> }
-  };
-
-  const inputLightStyle = "w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 shadow-sm focus:border-blue-400 focus:ring-4 focus:ring-blue-50/50 outline-none transition-all text-slate-800 placeholder-slate-400 font-medium text-sm";
+  const inputLightStyle = "w-full bg-white border border-slate-200 rounded-xl px-4 py-3 shadow-sm focus:border-blue-400 focus:ring-4 focus:ring-blue-50/50 outline-none transition-all text-slate-800 placeholder-slate-400 font-bold text-base";
+  const labelStyle = "text-sm font-bold text-slate-600 uppercase tracking-wide ml-1 mb-1 block";
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in duration-500">
@@ -227,78 +281,78 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
         <div className="bg-white rounded-3xl shadow-sm p-8 border border-slate-100 sticky top-6">
           <div className="flex items-center gap-3 mb-8">
             <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl">
-              <PlusCircle size={24} />
+              <PlusCircle size={28} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">Lập Kế Hoạch Tuần</h2>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Xác định mục tiêu kinh doanh</p>
+              <h2 className="text-2xl font-black text-slate-800 tracking-tight uppercase">Lập Kế Hoạch Tuần</h2>
+              <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-0.5">Xác định mục tiêu kinh doanh</p>
             </div>
           </div>
 
           <div className="flex gap-2 mb-8 p-1 bg-slate-50 rounded-2xl border border-slate-100">
-             <button onClick={handleDownloadTemplate} className="flex-1 flex items-center justify-center gap-2 bg-white text-slate-600 py-2.5 rounded-xl text-xs font-black hover:text-blue-600 transition border border-slate-200 shadow-sm uppercase tracking-tighter">
-               <Download size={14} /> Tải Mẫu
+             <button onClick={handleDownloadTemplate} className="flex-1 flex items-center justify-center gap-2 bg-white text-slate-700 py-3 rounded-xl text-sm font-black hover:text-blue-700 transition border border-slate-200 shadow-sm uppercase tracking-tight">
+               <Download size={16} /> Tải Mẫu
              </button>
-             <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-xl text-xs font-black hover:bg-blue-700 transition shadow-lg shadow-blue-500/20 uppercase tracking-tighter">
-               <Upload size={14} /> Nhập Excel
+             <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-3 rounded-xl text-sm font-black hover:bg-blue-700 transition shadow-lg shadow-blue-500/20 uppercase tracking-tight">
+               <Upload size={16} /> Nhập Excel
              </button>
              <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".xlsx, .xls" />
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tuần báo cáo</label>
+              <div className="space-y-1">
+                <label className={labelStyle}>Tuần báo cáo</label>
                 <select required className={inputLightStyle} value={formData.week_number} onChange={e => setFormData({...formData, week_number: e.target.value})}>
                   <option value="">Chọn tuần</option>
                   {Array.from({length: 53}, (_, i) => <option key={i} value={`Tuần ${i+1}`}>Tuần {i+1}</option>)}
                 </select>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ngày triển khai</label>
+              <div className="space-y-1">
+                <label className={labelStyle}>Ngày triển khai</label>
                 <input required type="date" className={inputLightStyle} value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Địa bàn & Người phối hợp</label>
+              <div className="space-y-1">
+                <label className={labelStyle}>Địa bàn & Người phối hợp</label>
                 <div className="grid grid-cols-2 gap-3">
                   <input required type="text" placeholder="Địa bàn công tác" className={inputLightStyle} value={formData.area} onChange={e => setFormData({...formData, area: e.target.value})} />
                   <input type="text" placeholder="Phối hợp với ai?" className={inputLightStyle} value={formData.collaborators} onChange={e => setFormData({...formData, collaborators: e.target.value})} />
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nội dung công việc</label>
+              <div className="space-y-1">
+                <label className={labelStyle}>Nội dung công việc</label>
                 <textarea required rows={3} placeholder="Mô tả chi tiết công việc dự kiến..." className={`${inputLightStyle} resize-none`} value={formData.work_content} onChange={e => setFormData({...formData, work_content: e.target.value})} />
               </div>
             </div>
 
             {/* PHẦN CHỈ TIÊU CHI TIẾT */}
             <div className="bg-slate-50/50 p-6 rounded-3xl border border-slate-100 shadow-inner">
-               <h4 className="text-[10px] font-black text-blue-600 uppercase mb-5 flex items-center gap-2 tracking-widest">
-                 <Plus size={14} /> Đăng ký chỉ tiêu kết quả
+               <h4 className="text-base font-black text-blue-700 uppercase mb-5 flex items-center gap-2 tracking-tight">
+                 <Plus size={18} /> Đăng ký chỉ tiêu kết quả
                </h4>
                
                <div className="space-y-6">
                  {/* Nhóm Dịch vụ lõi */}
                  <div>
-                   <p className="text-[9px] font-bold text-slate-400 uppercase mb-3 border-b border-slate-200 pb-1">Dịch vụ viễn thông</p>
+                   <p className="text-xs font-bold text-slate-500 uppercase mb-3 border-b border-slate-200 pb-1">Dịch vụ viễn thông</p>
                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5 mb-1"><Smartphone size={10}/> SIM</label>
+                        <label className="text-xs text-slate-600 font-bold flex items-center gap-1.5 mb-1.5"><Smartphone size={14} className="text-blue-500"/> SIM</label>
                         <input type="number" className={inputLightStyle} value={formData.sim_target} onChange={e => setFormData({...formData, sim_target: parseInt(e.target.value)||0})} />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5 mb-1"><Globe size={10}/> FIBER</label>
+                        <label className="text-xs text-slate-600 font-bold flex items-center gap-1.5 mb-1.5"><Globe size={14} className="text-emerald-500"/> FIBER</label>
                         <input type="number" className={inputLightStyle} value={formData.fiber_target} onChange={e => setFormData({...formData, fiber_target: parseInt(e.target.value)||0})} />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5 mb-1"><Tv size={10}/> MyTV</label>
+                        <label className="text-xs text-slate-600 font-bold flex items-center gap-1.5 mb-1.5"><Tv size={14} className="text-purple-500"/> MyTV</label>
                         <input type="number" className={inputLightStyle} value={formData.mytv_target} onChange={e => setFormData({...formData, mytv_target: parseInt(e.target.value)||0})} />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5 mb-1"><Smartphone size={10}/> VAS</label>
+                        <label className="text-xs text-slate-600 font-bold flex items-center gap-1.5 mb-1.5"><Smartphone size={14} className="text-indigo-500"/> VAS</label>
                         <input type="number" className={inputLightStyle} value={formData.vas_target} onChange={e => setFormData({...formData, vas_target: parseInt(e.target.value)||0})} />
                       </div>
                    </div>
@@ -306,22 +360,22 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
 
                  {/* Nhóm Dịch vụ số & CNTT */}
                  <div>
-                   <p className="text-[9px] font-bold text-slate-400 uppercase mb-3 border-b border-slate-200 pb-1">Dịch vụ số & CNTT</p>
+                   <p className="text-xs font-bold text-slate-500 uppercase mb-3 border-b border-slate-200 pb-1">Dịch vụ số & CNTT</p>
                    <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5 mb-1"><Camera size={10}/> MESH+CAM</label>
+                        <label className="text-xs text-slate-600 font-bold flex items-center gap-1.5 mb-1.5"><Camera size={14} className="text-orange-500"/> MESH+CAM</label>
                         <input type="number" className={inputLightStyle} value={formData.mesh_camera_target} onChange={e => setFormData({...formData, mesh_camera_target: parseInt(e.target.value)||0})} />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5 mb-1"><Cpu size={10}/> DV CNTT</label>
+                        <label className="text-xs text-slate-600 font-bold flex items-center gap-1.5 mb-1.5"><Cpu size={14} className="text-cyan-500"/> DV CNTT</label>
                         <input type="number" className={inputLightStyle} value={formData.cntt_target} onChange={e => setFormData({...formData, cntt_target: parseInt(e.target.value)||0})} />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5 mb-1"><DollarSign size={10}/> DT CNTT (đ)</label>
+                        <label className="text-xs text-slate-600 font-bold flex items-center gap-1.5 mb-1.5"><DollarSign size={14} className="text-rose-500"/> DT CNTT (đ)</label>
                         <input type="number" className={inputLightStyle} value={formData.revenue_cntt_target} onChange={e => setFormData({...formData, revenue_cntt_target: parseInt(e.target.value)||0})} />
                       </div>
                       <div>
-                        <label className="text-[10px] text-slate-500 font-bold flex items-center gap-1.5 mb-1"><Plus size={10}/> DV KHÁC</label>
+                        <label className="text-xs text-slate-600 font-bold flex items-center gap-1.5 mb-1.5"><Plus size={14} className="text-gray-500"/> DV KHÁC</label>
                         <input type="number" className={inputLightStyle} value={formData.other_services_target} onChange={e => setFormData({...formData, other_services_target: parseInt(e.target.value)||0})} />
                       </div>
                    </div>
@@ -329,7 +383,7 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
                </div>
             </div>
 
-            <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition transform active:scale-[0.98]">
+            <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-base uppercase tracking-widest shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition transform active:scale-[0.98]">
               Gửi Kế Hoạch Tuần
             </button>
           </form>
@@ -339,55 +393,40 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
       {/* DANH SÁCH KẾ HOẠCH ĐÃ LẬP */}
       <div className="lg:col-span-7 space-y-6">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="text-lg font-black text-slate-800 uppercase tracking-tighter">Lịch Sử Kế Hoạch ({myPlans.length})</h3>
+          <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Lịch Sử Kế Hoạch ({myPlans.length})</h3>
         </div>
         
+        {/* ACTIVE PLANS (This Week & Future) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {myPlans.length === 0 ? (
-            <div className="col-span-2 py-20 bg-white rounded-3xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-300">
-               <CalendarOff size={48} className="mb-4 opacity-20" />
-               <p className="font-bold text-sm">Chưa có kế hoạch nào được lập.</p>
+          {activePlans.length === 0 ? (
+            <div className="col-span-2 py-10 bg-white rounded-3xl border border-dashed border-slate-200 flex flex-col items-center justify-center text-slate-300">
+               <CalendarOff size={40} className="mb-2 opacity-20" />
+               <p className="font-bold text-sm">Chưa có kế hoạch tuần này.</p>
             </div>
           ) : (
-            myPlans.map(plan => (
-              <div key={plan.id} className="bg-white rounded-3xl shadow-sm p-6 border border-slate-100 group hover:shadow-md transition-all relative overflow-hidden">
-                <div className={`absolute top-0 right-0 px-4 py-1 rounded-bl-2xl text-[9px] font-black uppercase border-b border-l flex items-center gap-1.5 ${statusConfig[plan.status]?.color || 'bg-gray-100 text-gray-600'}`}>
-                   {statusConfig[plan.status]?.icon}
-                   {statusConfig[plan.status]?.label || plan.status}
-                </div>
-                
-                <div className="mb-4">
-                   <div className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{plan.week_number}</div>
-                   <div className="text-lg font-black text-slate-800">{new Date(plan.date).toLocaleDateString('vi-VN')}</div>
-                   <div className="text-xs font-bold text-slate-400 mt-1 uppercase">{plan.area}</div>
-                </div>
-
-                <div className="bg-slate-50 p-4 rounded-2xl text-xs text-slate-600 italic leading-relaxed mb-4 border border-slate-100">
-                  "{plan.work_content}"
-                </div>
-
-                <div className="grid grid-cols-4 gap-2">
-                   <div className="text-center bg-blue-50/50 p-2 rounded-xl border border-blue-100/50">
-                      <span className="text-[8px] font-black text-blue-400 block uppercase">SIM</span>
-                      <span className="text-xs font-black text-blue-700">{plan.sim_target}</span>
-                   </div>
-                   <div className="text-center bg-emerald-50/50 p-2 rounded-xl border border-emerald-100/50">
-                      <span className="text-[8px] font-black text-emerald-400 block uppercase">Fib</span>
-                      <span className="text-xs font-black text-emerald-700">{plan.fiber_target}</span>
-                   </div>
-                   <div className="text-center bg-purple-50/50 p-2 rounded-xl border border-purple-100/50">
-                      <span className="text-[8px] font-black text-purple-400 block uppercase">MyTV</span>
-                      <span className="text-xs font-black text-purple-700">{plan.mytv_target}</span>
-                   </div>
-                   <div className="text-center bg-amber-50/50 p-2 rounded-xl border border-amber-100/50">
-                      <span className="text-[8px] font-black text-amber-400 block uppercase">M/C</span>
-                      <span className="text-xs font-black text-amber-700">{plan.mesh_camera_target}</span>
-                   </div>
-                </div>
-              </div>
-            ))
+            activePlans.map(plan => <PlanCard key={plan.id} plan={plan} />)
           )}
         </div>
+
+        {/* ARCHIVED PLANS (Past Weeks) */}
+        {archivedPlans.length > 0 && (
+          <div className="pt-6">
+            <button 
+              onClick={() => setShowHistory(!showHistory)}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-bold text-sm transition-all"
+            >
+              {showHistory ? <ChevronUp size={16} /> : <History size={16} />}
+              {showHistory ? 'Thu gọn lịch sử' : `Xem lại các tuần trước (${archivedPlans.length})`}
+              {!showHistory && <ChevronDown size={16} />}
+            </button>
+
+            {showHistory && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 animate-in fade-in slide-in-from-top-4">
+                {archivedPlans.map(plan => <PlanCard key={plan.id} plan={plan} />)}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

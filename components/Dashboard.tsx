@@ -17,10 +17,10 @@ interface DashboardProps {
   plans: Plan[];
 }
 
-// Cấu hình màu sắc hiện đại
+// Cấu hình màu sắc hiện đại - CẬP NHẬT: MÀU CAM CHỦ ĐẠO CHO KẾ HOẠCH
 const COLORS = {
-  plan: '#cbd5e1',        // Slate 300 - Neutral for targets
-  actual: '#3b82f6',      // Blue 500 - Primary for actuals
+  plan: '#f97316',        // Orange 500 - Màu cam chủ đạo cho Kế hoạch (Nổi bật)
+  actual: '#3b82f6',      // Blue 500 - Màu xanh cho Thực hiện (Tương phản)
   exceeded: '#10b981',    // Emerald 500
   met: '#f59e0b',         // Amber 500
   notMet: '#ef4444',      // Red 500
@@ -57,15 +57,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         <div className="space-y-1.5">
           {payload.map((entry: any, index: number) => {
             const isRevenue = entry.dataKey === 'revenue_cntt_result' || entry.dataKey === 'revenue_cntt_target' || entry.dataKey === 'rev' || entry.name.includes('Doanh thu');
-            const val = isRevenue && entry.value < 1000 ? entry.value * 1000000 : entry.value; // Unscale for revenue if needed visually, but here we keep chart scale
+            // Logic để tô màu tooltip theo đúng màu cột
+            const color = entry.dataKey === 'plan' ? COLORS.plan : entry.color;
             
             return (
               <div key={index} className="flex items-center justify-between gap-6 text-sm">
                 <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: entry.color }}></div>
-                  <span className="font-medium text-slate-600">{entry.name}</span>
+                  <div className="w-2.5 h-2.5 rounded-full shadow-sm" style={{ backgroundColor: color }}></div>
+                  <span className="font-bold text-slate-600 uppercase text-[10px] tracking-wide">{entry.name}</span>
                 </div>
-                <span className="font-black text-slate-800 tabular-nums">
+                <span className={`font-black tabular-nums ${entry.dataKey === 'plan' ? 'text-orange-600 text-base' : 'text-slate-800'}`}>
                   {entry.value.toLocaleString('vi-VN')} {isRevenue ? '(Tr)' : ''}
                 </span>
               </div>
@@ -346,22 +347,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ users, plans }) => {
            </div>
         </div>
 
-        {/* Metric Cards */}
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between h-32 relative overflow-hidden group">
-           <div className="absolute right-0 top-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Target size={80} /></div>
-           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest z-10">Kế Hoạch</p>
-           <div className="flex items-baseline gap-1 z-10">
-             <span className="text-3xl font-black text-slate-800">{processedData.totalPlan.toLocaleString()}</span>
-             <span className="text-xs font-bold text-slate-400">đơn vị</span>
+        {/* Metric Cards - CARD KẾ HOẠCH NỔI BẬT */}
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-orange-200 flex flex-col justify-between h-32 relative overflow-hidden group">
+           <div className="absolute right-0 top-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity text-orange-600"><Target size={80} /></div>
+           <div className="flex items-center gap-2 mb-1 z-10">
+              <div className="p-1.5 bg-orange-100 text-orange-600 rounded-lg"><Target size={16}/></div>
+              <p className="text-xs font-black text-orange-500 uppercase tracking-widest">Kế Hoạch</p>
            </div>
-           <div className="w-full bg-slate-100 h-1.5 rounded-full mt-auto z-10 overflow-hidden">
-              <div className="h-full bg-slate-400 rounded-full w-full"></div>
+           
+           <div className="flex items-baseline gap-1 z-10 mt-auto">
+             <span className="text-4xl font-black text-orange-600 tracking-tighter drop-shadow-sm">{processedData.totalPlan.toLocaleString()}</span>
+             <span className="text-xs font-bold text-orange-400 uppercase">chỉ tiêu</span>
+           </div>
+           <div className="w-full bg-orange-50 h-1.5 rounded-full mt-2 z-10 overflow-hidden">
+              <div className="h-full bg-orange-500 rounded-full w-full"></div>
            </div>
         </div>
 
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-blue-100 flex flex-col justify-between h-32 relative overflow-hidden group">
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between h-32 relative overflow-hidden group">
            <div className="absolute right-0 top-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity text-blue-600"><Zap size={80} /></div>
-           <p className="text-xs font-bold text-blue-400 uppercase tracking-widest z-10">Thực Hiện</p>
+           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest z-10">Thực Hiện</p>
            <div className="flex items-baseline gap-1 z-10">
              <span className="text-3xl font-black text-blue-600">{processedData.totalActual.toLocaleString()}</span>
              <span className="text-xs font-bold text-blue-300">đơn vị</span>
@@ -455,7 +460,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ users, plans }) => {
                 <BarChart2 className="text-blue-600" size={24} />
                 So Sánh Hiệu Quả
               </h2>
-              <p className="text-xs font-bold text-slate-400 mt-1">So sánh Thực hiện vs Kế hoạch (NVKD)</p>
+              <p className="text-xs font-bold text-slate-400 mt-1">So sánh Thực hiện vs <span className="text-orange-500 font-black">Kế hoạch (Màu cam)</span></p>
             </div>
             
             {/* View Mode Toggle */}
@@ -477,8 +482,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ users, plans }) => {
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#64748b', fontWeight: 700}} />
                   <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
                   <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#8b5cf6'}} tickFormatter={(val) => `${val}`} />
-                  <Tooltip content={<CustomTooltip />} cursor={{fill: '#f8fafc'}} />
+                  <Tooltip content={<CustomTooltip />} cursor={{fill: '#fff7ed'}} />
                   <Legend verticalAlign="top" iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                  {/* CỘT KẾ HOẠCH MÀU CAM */}
                   <Bar yAxisId="left" name="Kế hoạch" dataKey="plan" fill={COLORS.plan} radius={[4, 4, 4, 4]} barSize={16} />
                   <Bar yAxisId="left" name="Thực hiện" dataKey="actual" fill={COLORS.actual} radius={[4, 4, 4, 4]} barSize={16} />
                 </ComposedChart>
@@ -487,8 +493,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ users, plans }) => {
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                   <XAxis type="number" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
                   <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{fontSize: 11, fill: '#475569', fontWeight: 600}} />
-                  <Tooltip content={<CustomTooltip />} cursor={{fill: '#f8fafc'}} />
+                  <Tooltip content={<CustomTooltip />} cursor={{fill: '#fff7ed'}} />
                   <Legend verticalAlign="top" iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                  {/* CỘT KẾ HOẠCH MÀU CAM */}
                   <Bar name="Kế hoạch" dataKey="plan" fill={COLORS.plan} radius={[0, 4, 4, 0]} barSize={12} />
                   <Bar name="Thực hiện" dataKey="actual" fill={COLORS.actual} radius={[0, 4, 4, 0]} barSize={12} />
                 </BarChart>
@@ -575,10 +582,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ users, plans }) => {
                           </div>
                           <div>
                             <p className="font-bold text-slate-800">{emp.name}</p>
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase mt-0.5">
-                               <span>TH: {emp.actual}</span>
+                            <div className="flex items-center gap-2 text-[10px] font-medium text-slate-400 uppercase mt-0.5">
+                               <span>TH: <b className="text-slate-600">{emp.actual}</b></span>
                                <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                               <span>KH: {emp.plan}</span>
+                               <span>KH: <b className="text-orange-600 font-black text-xs">{emp.plan}</b></span>
                             </div>
                           </div>
                        </div>
@@ -603,10 +610,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ users, plans }) => {
                           <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-white bg-rose-300 shadow-md">!</div>
                           <div>
                             <p className="font-bold text-slate-800">{emp.name}</p>
-                            <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase mt-0.5">
-                               <span>TH: {emp.actual}</span>
+                            <div className="flex items-center gap-2 text-[10px] font-medium text-slate-400 uppercase mt-0.5">
+                               <span>TH: <b className="text-slate-600">{emp.actual}</b></span>
                                <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
-                               <span>KH: {emp.plan}</span>
+                               <span>KH: <b className="text-orange-600 font-black text-xs">{emp.plan}</b></span>
                             </div>
                           </div>
                        </div>
