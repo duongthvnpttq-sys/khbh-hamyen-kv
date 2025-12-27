@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { User, Plan } from '../types';
 import * as XLSX from 'xlsx';
 import { 
@@ -21,7 +21,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.R
   completed: { label: 'Hoàn thành', color: 'bg-blue-50 text-blue-700 border-blue-100', icon: <CheckCircle size={12} /> }
 };
 
-const PlanCard = ({ plan }: { plan: Plan }) => (
+const PlanCard: React.FC<{ plan: Plan }> = ({ plan }) => (
   <div className="bg-white rounded-3xl shadow-sm p-6 border border-slate-100 group hover:shadow-md transition-all relative overflow-hidden">
     <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-2xl text-[10px] font-black uppercase border-b border-l flex items-center gap-1.5 ${statusConfig[plan.status]?.color || 'bg-gray-100 text-gray-600'}`}>
         {statusConfig[plan.status]?.icon}
@@ -30,7 +30,7 @@ const PlanCard = ({ plan }: { plan: Plan }) => (
     
     <div className="mb-4 pt-2">
         <div className="text-xs font-black text-blue-600 uppercase tracking-widest mb-1">{plan.week_number}</div>
-        <div className="text-xl font-black text-slate-800">{new Date(plan.date).toLocaleDateString('vi-VN')}</div>
+        <div className="text-xl font-black text-slate-800">{new Date(plan.date).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
         <div className="text-sm font-bold text-slate-500 mt-1 uppercase flex items-center gap-1">{plan.area}</div>
     </div>
 
@@ -80,27 +80,93 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
     implementation_method: 'Cá nhân'
   });
 
-  // Lọc kế hoạch của user
+  // --- HELPER FUNCTIONS FOR DATE/WEEK ---
+  const getISOWeek = (date: Date) => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  };
+
+  const getDatesOfWeek = (weekNumber: number, year: number) => {
+    // Jan 4th is always in week 1
+    const d = new Date(year, 0, 4);
+    const dayNum = d.getDay() || 7;
+    // Get the Monday of week 1
+    const week1Start = new Date(d);
+    week1Start.setDate(d.getDate() - dayNum + 1);
+    
+    // Add weeks to get to target week's Monday
+    const targetMonday = new Date(week1Start);
+    targetMonday.setDate(week1Start.getDate() + (weekNumber - 1) * 7);
+    
+    const dates = [];
+    const dayNames = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
+    
+    for (let i = 0; i < 7; i++) {
+      const currentDate = new Date(targetMonday);
+      currentDate.setDate(targetMonday.getDate() + i);
+      const dateStr = currentDate.toISOString().split('T')[0];
+      dates.push({
+        value: dateStr,
+        label: `${dateStr} (${dayNames[i]})`
+      });
+    }
+    return dates;
+  };
+
+  const currentYear = new Date().getFullYear();
+  const currentWeek = getISOWeek(new Date());
+
+  // Create week options starting from current week
+  const weekOptions = useMemo(() => {
+    const options = [];
+    for (let i = currentWeek; i <= 53; i++) {
+      options.push(`Tuần ${i}`);
+    }
+    return options;
+  }, [currentWeek]);
+
+  // Generate date options based on selected week
+  const dateOptions = useMemo(() => {
+    if (!formData.week_number) return [];
+    const weekNum = parseInt(formData.week_number.replace('Tuần ', ''));
+    if (isNaN(weekNum)) return [];
+    return getDatesOfWeek(weekNum, currentYear);
+  }, [formData.week_number, currentYear]);
+
+  // Handle week change: auto select first day of that week
+  const handleWeekChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newWeek = e.target.value;
+    const weekNum = parseInt(newWeek.replace('Tuần ', ''));
+    const dates = getDatesOfWeek(weekNum, currentYear);
+    
+    setFormData({
+      ...formData,
+      week_number: newWeek,
+      date: dates[0]?.value || '' // Default to Monday
+    });
+  };
+
+  // --- DATA FILTERING ---
   const myPlans = plans
     .filter(p => p.employee_id === currentUser.employee_id)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const existingDates = myPlans.map(p => p.date);
 
-  // --- LOGIC ẨN TUẦN CŨ ---
-  // Tính ngày Thứ 2 của tuần hiện tại
   const now = new Date();
-  const currentDay = now.getDay(); // 0 là Chủ nhật
-  const distanceToMonday = (currentDay + 6) % 7; // Số ngày lùi về thứ 2
+  const currentDay = now.getDay(); // 0 is Sunday
+  const distanceToMonday = (currentDay + 6) % 7;
   const mondayDate = new Date(now);
   mondayDate.setDate(now.getDate() - distanceToMonday);
   mondayDate.setHours(0, 0, 0, 0);
 
-  // Phân loại kế hoạch
   const activePlans = myPlans.filter(p => new Date(p.date) >= mondayDate);
   const archivedPlans = myPlans.filter(p => new Date(p.date) < mondayDate);
-  // -------------------------
 
+  // --- EXCEL DOWNLOAD ---
   const handleDownloadTemplate = () => {
     const headers = [['Tuần', 'Ngày (YYYY-MM-DD)', 'Địa bàn', 'Nội dung', 'Người phối hợp', 'SIM', 'VAS', 'Fiber', 'MyTV', 'Mesh/Cam', 'DV CNTT', 'DT CNTT', 'DV Khác', 'Thời gian', 'Phương thức']];
     const sample = [['Tuần 1', new Date().toISOString().split('T')[0], 'Xã Yên Thuận', 'Bán hàng lưu động', '', 5, 2, 1, 1, 1, 0, 0, 0, '8h-17h', 'Cá nhân']];
@@ -112,32 +178,17 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
 
   const parseExcelDate = (val: any): string | null => {
     if (!val) return null;
-
-    // Handle Excel Serial Date (Number)
     if (typeof val === 'number') {
-      // Excel serial date 1 is 1900-01-01, but JS date uses 1970.
-      // 25569 is the offset days.
       const date = new Date(Math.round((val - 25569) * 86400 * 1000));
-      if (!isNaN(date.getTime())) {
-        return date.toISOString().split('T')[0];
-      }
+      if (!isNaN(date.getTime())) return date.toISOString().split('T')[0];
     }
-
-    // Handle String Date
     if (typeof val === 'string') {
       const trimmed = val.trim();
-      // Matches YYYY-MM-DD
-      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-        return trimmed;
-      }
-      // Matches DD/MM/YYYY or DD-MM-YYYY
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
       if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(trimmed)) {
         const parts = trimmed.split(/[\/-]/);
-        // Assuming DD/MM/YYYY
         return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
       }
-      
-      // Try standard parse
       const d = new Date(trimmed);
       if (!isNaN(d.getTime())) {
         const year = d.getFullYear();
@@ -146,7 +197,6 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
         return `${year}-${month}-${day}`;
       }
     }
-
     return null;
   };
 
@@ -227,7 +277,7 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (existingDates.includes(formData.date)) {
-      alert("Ngày này đã được lập kế hoạch.");
+      alert(`Ngày ${formData.date} đã được lập kế hoạch. Vui lòng chọn ngày khác.`);
       return;
     }
 
@@ -253,6 +303,8 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
       submitted_at: new Date().toISOString()
     });
     
+    // Reset form but keep week selected for convenience, or clear it.
+    // Let's clear work content but keep week/date flow smooth
     setFormData({ 
       ...formData, 
       date: '', 
@@ -302,15 +354,30 @@ export const WeeklyPlan: React.FC<WeeklyPlanProps> = ({ currentUser, plans, onAd
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className={labelStyle}>Tuần báo cáo</label>
-                <select required className={inputLightStyle} value={formData.week_number} onChange={e => setFormData({...formData, week_number: e.target.value})}>
+                <label className={labelStyle}>Tuần báo cáo (Hiện tại: Tuần {currentWeek})</label>
+                <select required className={inputLightStyle} value={formData.week_number} onChange={handleWeekChange}>
                   <option value="">Chọn tuần</option>
-                  {Array.from({length: 53}, (_, i) => <option key={i} value={`Tuần ${i+1}`}>Tuần {i+1}</option>)}
+                  {weekOptions.map(week => (
+                    <option key={week} value={week}>{week}</option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-1">
                 <label className={labelStyle}>Ngày triển khai</label>
-                <input required type="date" className={inputLightStyle} value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
+                <select 
+                  required 
+                  className={inputLightStyle} 
+                  value={formData.date} 
+                  onChange={e => setFormData({...formData, date: e.target.value})}
+                  disabled={!formData.week_number}
+                >
+                  <option value="">{formData.week_number ? '-- Chọn ngày --' : '-- Chọn tuần trước --'}</option>
+                  {dateOptions.map(opt => (
+                    <option key={opt.value} value={opt.value} disabled={existingDates.includes(opt.value)}>
+                      {opt.label} {existingDates.includes(opt.value) ? '(Đã lập)' : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
